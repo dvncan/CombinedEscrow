@@ -32,3 +32,10 @@
 ```bash
     forge test --match-path test/CombinedEscrow.t.sol -vvv
 ```
+
+## Appendix A
+**Happy Path**
+![combinedEs_happy_path](https://github.com/user-attachments/assets/86f390ad-bac8-4922-9f4f-f42b2d156b93)
+
+**Unhappy Path**
+![combinedEs_unhappy_path drawio](https://github.com/user-attachments/assets/a64f8111-39c4-4e00-8822-80545a042739)
