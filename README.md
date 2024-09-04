@@ -21,13 +21,14 @@
     git clone https://github.com/dvncan/CombinedEscrow.git
 
 2.  Install forge libs
-    ```bash
+```bash
     forge install OpenZeppelin/openzeppelin-contracts@4.8.0
-
+```
 3.  Compile 
-    ```bash
+```bash
     forge build
-
+```
 3.a Test
-    ```bash
+```bash
     forge test --match-path test/CombinedEscrow.t.sol -vvv
+```
