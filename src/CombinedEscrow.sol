@@ -14,56 +14,10 @@
 // SPDX-License-Identifier: BONSAI3
 pragma solidity >=0.8.19;
 
-/*********************************************************************************
- *                                                                               *
- *                           █████████████████████████████████                   *
- *                           █                                                   *
- *                           █   contract Destroy {                     *
- *                           █     enum SelfDestruct {                           *
- *                           █           Inactive,                               *
- *                           █           Active                                  *
- *                           █     }                                             *
- *                           █     function burnAfterReading() internal virtual; *
- *                           █     event Burned(SelfDestruct state);             *
- *                           █   }                                               *
- *                           █                                                   *
- *                           █████████████████████████████████                   *
- *                                                                               *
- *********************************************************************************/
-
-contract SelfDestruct is Ownable {
-    enum DestructState {
-        Inactive,
-        Active
-    }
-    event Burned(DestructState state);
-
-    //@dev _current can only be flipped when contract is closed
-    DestructState private _current;
-    modifier contractNotDestroyed() {
-        require(
-            _current == DestructState.Inactive,
-            "CombinedEscrow: Contract has been destroyed"
-        );
-        _;
-    }
-
-    // Internal functions to manage contract destruction when do i call this?
-    function burnAfterReading() public onlyOwner contractNotDestroyed {
-        // Implement the logic here
-        // For example:
-        require(_current == DestructState.Inactive, "Already burned");
-        _current = DestructState.Active;
-        emit Burned(_current);
-
-        selfdestruct(payable(owner())); // Send remaining Ether to the owner
-    }
-}
-
-import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import {SelfDestruct} from "./SelfDestruct.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import {RefundEscrow} from "../lib/openzeppelin-contracts/contracts/utils/escrow/RefundEscrow.sol";
+import {RefundEscrow} from "./RefundEscrow.sol";
 import {SafeERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /***********************************************************************************
@@ -142,7 +96,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         address payable __vault,
         address payable projectTreasury,
         address __saleToken
-    ) RefundEscrow(projectTreasury) Ownable() {
+    ) RefundEscrow(projectTreasury) {
         vault = __vault;
         _saleToken = IERC20(__saleToken);
         emit NewEscrowCreated(projectTreasury, __saleToken);
@@ -161,7 +115,6 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         payable
         override
         nonReentrant
-        onlyOwner
         contractNotDestroyed
         onlyWhen(state(), State.Active)
     {
@@ -180,7 +133,6 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         virtual
         override
         nonReentrant
-        onlyOwner
         contractNotDestroyed
         onlyWhen(state(), State.Refunding)
     {
@@ -190,7 +142,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
             "ConditionalEscrow: payee is not allowed to withdraw"
         );
         super.withdraw(payee);
-        if (getTotalEthBalance() == 0) burnAfterReading();
+        if (getTotalEthBalance() == 0) _burnAfterReading();
         emit Withdrawal(payee, super.depositsOf(payee));
     }
 
@@ -199,7 +151,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         uint256 amountToSend,
         uint256 balance,
         uint256 fee
-    ) internal returns (bool) {
+    ) internal pure returns (bool) {
         if (balance <= 0) revert InsufficientBalance();
         if (amountToSend <= 0 || amountToSend >= balance)
             revert BalanceTransferError();
@@ -214,7 +166,6 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         public
         override
         nonReentrant
-        onlyOwner
         contractNotDestroyed
         onlyWhen(state(), State.Closed)
     {
@@ -246,7 +197,6 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
     function beneficiaryWithdrawRefund()
         public
         nonReentrant
-        onlyOwner
         contractNotDestroyed
         onlyWhen(state(), State.Refunding)
     {
@@ -271,7 +221,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         uint256 amount,
         address router,
         address payee
-    ) public nonReentrant onlyOwner contractNotDestroyed {
+    ) public nonReentrant contractNotDestroyed {
         if (state() != State.Active) revert EscrowStateError();
         require(amount > 0, "Amount must be greater than 0");
         _saleToken.safeTransferFrom(router, address(this), amount);
@@ -286,7 +236,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
      */
     function withdrawERC20(
         address payee
-    ) public virtual nonReentrant onlyOwner contractNotDestroyed {
+    ) public virtual nonReentrant contractNotDestroyed {
         if (state() != State.Closed) revert EscrowStateError();
         uint256 amount = userErc20Balances[address(_saleToken)][payee];
         if (amount <= 0) revert InsufficientBalance();
@@ -294,7 +244,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         totalErcBalance -= amount;
         _saleToken.safeTransfer(payee, amount);
         emit Withdrawal(payee, amount);
-        if (totalErcBalance == 0) burnAfterReading();
+        if (totalErcBalance == 0) _burnAfterReading();
     }
 
     // Get ETH Balance

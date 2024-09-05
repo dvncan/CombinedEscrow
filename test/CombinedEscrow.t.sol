@@ -3,122 +3,123 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "../lib/forge-std/src/Test.sol";
 import "../src/CombinedEscrow.sol";
-import {ERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-// import {IERC20} from "../lib/forge-std/src/interfaces/IERC20.sol";
+import {SimpletToken} from "./utils/SimpleToken.sol";
 
-contract CounterTest is Test {
-    CombinedEscrow public counter;
-    address me;
-    tokenMint tok;
+contract EscrowTest is Test {
+    CombinedEscrow public escrow;
+    address private _owner;
+    address private _payee;
+    address private _bob;
+    uint256 private _alicePk;
+    uint256 private _bobPk;
+    address private _beneficiary;
+    address payable private _vault;
+
+    SimpletToken private _tok;
+
     function setUp() public {
-        me = address(0x3);
-
-        vm.deal(me, 1 ether);
-        vm.startPrank(me);
-
-        tok = new tokenMint();
-        counter = new CombinedEscrow(
-            payable(address(0x1)),
-            payable(address(0x2)),
-            address(tok)
+        _owner = address(0xFF);
+        _beneficiary = payable(address(0x1));
+        // trade Ether for ERC20
+        _payee = payable(address(0x2));
+        _vault = payable(address(0x3));
+        vm.startPrank(_owner);
+        _tok = new SimpletToken();
+        _tok.transfer(_payee, 100 ether);
+        escrow = new CombinedEscrow(
+            _vault,
+            payable(_beneficiary),
+            address(_tok)
         );
+        // Fund the accounts
+        vm.deal(_owner, 100 ether);
+        vm.deal(_payee, 100 ether);
 
-        vm.stopPrank();
-
-        assertEq(me, counter.owner(), "stop");
-        assertEq(
-            counter.state() == RefundEscrow.State.Active,
-            true,
-            "State issue"
-        );
-    }
-
-    function test_simpleDeposit() public {
-        vm.startPrank(me);
-        counter.deposit{value: 10000}(me);
-        assertEq(counter.getTotalEthBalance(), 10000, "Balance error");
-        tok.approve(address(counter), 10 ether);
-        counter.depositERC20(10000, me, me);
-        assertEq(counter.getERC20Balance(me), 10000, "Balance error");
+        // Mint and approve tokens for escrow
+        _tok.approve(address(escrow), type(uint256).max);
         vm.stopPrank();
     }
 
-    function test_multipleDeposit() public {
+    function testSimpleDeposit() public {
+        vm.startPrank(_payee);
+        escrow.deposit{value: 10000}(_payee);
+        assertEq(escrow.getTotalEthBalance(), 10000, "Balance error");
+        _tok.approve(address(escrow), 10 ether);
+        escrow.depositERC20(10000, _payee, _payee);
+        assertEq(escrow.getERC20Balance(_payee), 10000, "Balance error");
+        vm.stopPrank();
+    }
+
+    function testMultipleDeposit() public {
         uint8 amount = 0xF;
-        vm.startPrank(me);
-        counter.deposit{value: amount}(me);
-        assertEq(counter.getTotalEthBalance(), amount, "Balance error");
-        counter.deposit{value: amount}(me);
-        assertEq(counter.getTotalEthBalance(), 2 * amount, "Balance error");
-        counter.deposit{value: amount}(me);
-        assertEq(counter.getTotalEthBalance(), 3 * amount, "Balance error");
+        vm.startPrank(_payee);
+        escrow.deposit{value: amount}(_payee);
+        assertEq(escrow.getTotalEthBalance(), amount, "Balance error");
+        escrow.deposit{value: amount}(_payee);
+        assertEq(escrow.getTotalEthBalance(), 2 * amount, "Balance error");
+        escrow.deposit{value: amount}(_payee);
+        assertEq(escrow.getTotalEthBalance(), 3 * amount, "Balance error");
         vm.stopPrank();
     }
 
-    function test_stateClose() public {
-        vm.startPrank(me);
-        counter.close();
-        vm.stopPrank();
+    function testStateClose() public {
+        vm.startPrank(_owner);
+        escrow.close();
         assertEq(
-            counter.state() == RefundEscrow.State.Closed,
+            escrow.state() == RefundEscrow.State.Closed,
             true,
             "State issue"
         );
+        vm.stopPrank();
     }
 
-    function testFail_withdraw() public {
+    function testFailWithdraw() public {
         // failure as withdraw is for token refund not close
-        test_simpleDeposit();
-        test_stateClose();
-        vm.startPrank(me);
-        counter.withdraw(payable(me));
-        assertEq(me.balance, 1 ether, "stop");
+        testSimpleDeposit();
+        testStateClose();
+        vm.startPrank(_payee);
+        escrow.withdraw(payable(_payee));
+        assertEq(_payee.balance, 1 ether, "stop");
     }
     function test_withdrawErc() public {
-        test_simpleDeposit();
-        test_stateClose();
-        vm.startPrank(me);
+        testSimpleDeposit();
+        testStateClose();
+        vm.startPrank(_payee);
         assertEq(
-            tok.balanceOf(me),
+            _tok.balanceOf(_payee),
             100 ether - 10000,
             "stop - ERC balance before"
         );
         // Expect the call to succeed but the contract to be destroyed
 
         // Expect the Withdrawn event to be emitted
-        vm.expectEmit(true, true, true, false);
-        emit IERC20.Transfer(address(counter), me, 10000);
-        emit CombinedEscrow.Withdrawal(me, 10000);
+        vm.expectEmit(true, true, true, true);
+        emit IERC20.Transfer(address(escrow), _payee, 10000);
+        emit CombinedEscrow.Withdrawal(_payee, 10000);
         emit SelfDestruct.Burned(SelfDestruct.DestructState.Active);
-        counter.withdrawERC20(me);
+        escrow.withdrawERC20(_payee);
 
         // Check final balance
-        assertEq(tok.balanceOf(me), 100 ether, "stop - ERC balance after");
+        assertEq(_tok.balanceOf(_payee), 100 ether, "stop - ERC balance after");
 
         vm.stopPrank();
     }
-    function test_stateRefund() public {
-        vm.startPrank(me);
-        counter.enableRefunds();
+    function testStateRefund() public {
+        vm.startPrank(_owner);
+        escrow.enableRefunds();
         vm.stopPrank();
         assertEq(
-            counter.state() == RefundEscrow.State.Refunding,
+            escrow.state() == RefundEscrow.State.Refunding,
             true,
             "State issue"
         );
     }
 
     function test_simpleWithdraw() public {
-        test_simpleDeposit();
-        test_stateRefund();
-        vm.startPrank(me);
-        counter.withdraw(payable(me));
-        assertEq(me.balance, 1 ether, "stop");
-    }
-}
-
-contract tokenMint is ERC20 {
-    constructor() ERC20("name", "symbol") {
-        _mint(msg.sender, 100 ether);
+        testSimpleDeposit();
+        testStateRefund();
+        vm.startPrank(_payee);
+        escrow.withdraw(payable(_payee));
+        assertEq(_payee.balance, 100 ether, "stop");
     }
 }
