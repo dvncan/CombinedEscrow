@@ -91,6 +91,10 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         _;
     }
 
+    receive() external payable {
+        deposit(msg.sender);
+    }
+
     // The owner of the reundescrow contract will be this contract which holds the eth. combined can execute transactions on refund but only through bonsai proxy.
     constructor(
         address payable __vault,
@@ -165,6 +169,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
     function beneficiaryWithdraw()
         public
         override
+        onlyOwner
         nonReentrant
         contractNotDestroyed
         onlyWhen(state(), State.Closed)
@@ -179,23 +184,22 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
 
         // send 95% to beneficiary
         (sent, ) = beneficiary().call{value: amountToSend}("");
-
+        // beneficiary transfer failure
         if (!sent) revert BalanceTransferError();
+
         // take 5% fee
         (sent, ) = vault.call{value: fee}("");
-
+        // fee transfer failure
         if (!sent) revert BalanceTransferError();
 
+        // balance == 0
         if (address(this).balance != 0) revert BalanceTransferError();
         emit BeneficiaryWithdrawal(amountToSend, fee);
     }
 
-    receive() external payable {
-        deposit(msg.sender);
-    }
-
     function beneficiaryWithdrawRefund()
         public
+        onlyOwner
         nonReentrant
         contractNotDestroyed
         onlyWhen(state(), State.Refunding)
@@ -203,12 +207,13 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         if (!verifyAmountsBeforeTransfer(totalErcBalance, totalErcBalance, 0))
             revert AdminError();
 
-        _saleToken.safeTransfer(address(beneficiary()), totalErcBalance);
-        require(
-            IERC20(_saleToken).balanceOf(beneficiary()) >= totalErcBalance,
-            "withdrawAfterRefund Balance Failure"
-        );
+        uint256 amountToSend = totalErcBalance;
         totalErcBalance = 0;
+        _saleToken.safeTransfer(address(beneficiary()), amountToSend);
+        // check that funds were received
+
+        if (IERC20(_saleToken).balanceOf(beneficiary()) < amountToSend)
+            revert BalanceTransferError();
     }
 
     /**
@@ -222,6 +227,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         address router,
         address payee
     ) public nonReentrant contractNotDestroyed {
+        if (_saleToken.balanceOf(msg.sender) == 0) revert InsufficientBalance();
         if (state() != State.Active) revert EscrowStateError();
         require(amount > 0, "Amount must be greater than 0");
         _saleToken.safeTransferFrom(router, address(this), amount);
