@@ -82,8 +82,8 @@ contract CombinedEscrow is
         address indexed beneficiary,
         address indexed saleToken
     );
-    event Deposit(address indexed payee, uint256 weiAmount);
-    event Withdrawal(address indexed payee, uint256 weiAmount);
+    // event Deposited(address indexed payee, uint256 weiAmount);
+    // event Withdrawn(address indexed payee, uint256 weiAmount);
     event BeneficiaryWithdrawal(uint256 amount, uint256 fee);
     // Errors
     error InsufficientBalance();
@@ -145,14 +145,16 @@ contract CombinedEscrow is
         contractNotDestroyed
         onlyWhen(state(), State.Refunding)
     {
-        if (super.depositsOf(payee) <= 0) revert InsufficientBalance();
+        uint256 deposits = super.depositsOf(payee);
+        if (deposits <= 0) revert InsufficientBalance();
         require(
             withdrawalAllowed(payee),
             "ConditionalEscrow: payee is not allowed to withdraw"
         );
         super.withdraw(payee);
+        if (super.depositsOf(payee) != 0) revert BalanceTransferError();
         if (ethBalance() == 0) _burnAfterReading();
-        emit Withdrawal(payee, super.depositsOf(payee));
+        emit Withdrawn(payee, deposits);
     }
 
     // @dev verify fee before transfer
@@ -238,7 +240,7 @@ contract CombinedEscrow is
         _saleToken.safeTransferFrom(router, address(this), amount);
         userErc20Balances[address(_saleToken)][payee] += amount;
         totalErcBalance += amount;
-        emit Deposit(payee, amount);
+        emit Deposited(payee, amount);
     }
 
     /**pret
