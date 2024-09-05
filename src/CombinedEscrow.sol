@@ -12,14 +12,14 @@
  ********************************************************************************/
 
 // SPDX-License-Identifier: BONSAI3
-pragma solidity >=0.8.19;
+pragma solidity >=0.8.24;
 
 import {SelfDestruct} from "./SelfDestruct.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {RefundEscrow} from "./RefundEscrow.sol";
 import {SafeERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-
+import {TypeValidation} from "./utils/TypeValidation.sol";
 /***********************************************************************************
  *                                                                                 *
  *           █████████████████████████████████████████████████████████████████    *
@@ -61,16 +61,21 @@ import {SafeERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/uti
  * @notice Contract can be used with ERC20 & ERC404
  * @dev    Funds can only be withdrawn if escrow.closed();
  */
-contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
+contract CombinedEscrow is
+    SelfDestruct,
+    RefundEscrow,
+    ReentrancyGuard,
+    TypeValidation
+{
     using SafeERC20 for IERC20;
 
     mapping(address => mapping(address => uint256)) public userErc20Balances; // token => user => amount
     uint256 public totalErcBalance;
-    IERC20 public immutable _saleToken; // token address is immutable
-    address payable private immutable vault; // vault [takes a 5% fee currently] TODO:
+    IERC20 private immutable _saleToken; // token address is immutable
+    address payable private immutable _vault; // vault [takes a 5% fee currently] TODO:
 
-    uint8 immutable fee_numerator = 5;
-    uint8 immutable fee_denominator = 100;
+    uint8 private immutable _fee_numerator = 5;
+    uint8 private immutable _fee_denominator = 100;
 
     // Events
     event NewEscrowCreated(
@@ -101,7 +106,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         address payable projectTreasury,
         address __saleToken
     ) RefundEscrow(projectTreasury) {
-        vault = __vault;
+        _vault = __vault;
         _saleToken = IERC20(__saleToken);
         emit NewEscrowCreated(projectTreasury, __saleToken);
     }
@@ -123,8 +128,8 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         onlyWhen(state(), State.Active)
     {
         if (msg.value <= 0) revert InsufficientBalance();
+        validateAddressStrict(refundee);
         super.deposit(refundee);
-        emit Deposit(refundee, msg.value);
     }
 
     /**
@@ -146,7 +151,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
             "ConditionalEscrow: payee is not allowed to withdraw"
         );
         super.withdraw(payee);
-        if (getTotalEthBalance() == 0) _burnAfterReading();
+        if (ethBalance() == 0) _burnAfterReading();
         emit Withdrawal(payee, super.depositsOf(payee));
     }
 
@@ -176,7 +181,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
     {
         bool sent = false;
         uint256 balanceB4Transfer = address(this).balance;
-        uint256 fee = (balanceB4Transfer * fee_numerator) / fee_denominator;
+        uint256 fee = (balanceB4Transfer * _fee_numerator) / _fee_denominator;
         uint256 amountToSend = balanceB4Transfer - fee;
 
         if (!verifyAmountsBeforeTransfer(amountToSend, balanceB4Transfer, fee))
@@ -188,7 +193,7 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         if (!sent) revert BalanceTransferError();
 
         // take 5% fee
-        (sent, ) = vault.call{value: fee}("");
+        (sent, ) = _vault.call{value: fee}("");
         // fee transfer failure
         if (!sent) revert BalanceTransferError();
 
@@ -249,12 +254,19 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         userErc20Balances[address(_saleToken)][payee] = 0;
         totalErcBalance -= amount;
         _saleToken.safeTransfer(payee, amount);
-        emit Withdrawal(payee, amount);
         if (totalErcBalance == 0) _burnAfterReading();
     }
 
+    function saleToken() public view returns (address) {
+        return address(_saleToken);
+    }
+
+    function vault() public view returns (address) {
+        return _vault;
+    }
+
     // Get ETH Balance
-    function getTotalEthBalance() public view returns (uint256) {
+    function ethBalance() public view returns (uint256) {
         return address(this).balance;
     }
 
@@ -264,16 +276,12 @@ contract CombinedEscrow is SelfDestruct, RefundEscrow, ReentrancyGuard {
         return super.depositsOf(saleParticipant);
     }
 
-    function getTotalERCBalance() public view returns (uint256) {
+    function erc20Balance() public view returns (uint256) {
         return totalErcBalance;
     }
 
     // Get ERC20 Balance
     function getERC20Balance(address user) public view returns (uint256) {
         return userErc20Balances[address(_saleToken)][user];
-    }
-
-    function getEthEscrowBalance() public view returns (uint256) {
-        return address(this).balance;
     }
 }
