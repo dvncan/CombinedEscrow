@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BONSAI3
 pragma solidity >=0.8.19;
 
-abstract contract Destroy {
+abstract contract SelfDestruct {
     enum SelfDestruct {
         Inactive,
         Active

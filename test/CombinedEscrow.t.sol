@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "../lib/forge-std/src/Test.sol";
-import {CombinedEscrow, RefundEscrow} from "../src/CombinedEscrow.sol";
+import "../src/CombinedEscrow.sol";
 import {ERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 // import {IERC20} from "../lib/forge-std/src/interfaces/IERC20.sol";
 
@@ -74,18 +74,29 @@ contract CounterTest is Test {
         counter.withdraw(payable(me));
         assertEq(me.balance, 1 ether, "stop");
     }
-
     function test_withdrawErc() public {
-        // failure as withdraw is for token refund not close
         test_simpleDeposit();
         test_stateClose();
         vm.startPrank(me);
-        assertEq(tok.balanceOf(me), 100 ether - 10000, "stop - ERC balance");
-        counter.withdrawERC20(me);
-        assertEq(me.balance, 1 ether - 10000, "stop - ETH balance");
-        assertEq(tok.balanceOf(me), 100 ether, "stop - ERC balance");
-    }
+        assertEq(
+            tok.balanceOf(me),
+            100 ether - 10000,
+            "stop - ERC balance before"
+        );
+        // Expect the call to succeed but the contract to be destroyed
 
+        // Expect the Withdrawn event to be emitted
+        vm.expectEmit(true, true, true, false);
+        emit IERC20.Transfer(address(counter), me, 10000);
+        emit CombinedEscrow.Withdrawal(me, 10000);
+        emit SelfDestruct.Burned(SelfDestruct.DestructState.Active);
+        counter.withdrawERC20(me);
+
+        // Check final balance
+        assertEq(tok.balanceOf(me), 100 ether, "stop - ERC balance after");
+
+        vm.stopPrank();
+    }
     function test_stateRefund() public {
         vm.startPrank(me);
         counter.enableRefunds();
