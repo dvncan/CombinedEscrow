@@ -34,10 +34,10 @@ abstract contract TypeValidation {
     function validateNewBalanceOverflow(
         uint256 a,
         uint256 b
-    ) internal returns (bool) {
+    ) internal pure returns (bool) {
         // Check for overflow;
-        uint256 newBalance = b + a;
-        emit debug(newBalance, b);
+        // uint256 newBalance = b + a;
+        // emit debug(newBalance, b);
         if (a + b > type(uint256).max / 2) revert OverflowBlocked();
         return true;
     }
