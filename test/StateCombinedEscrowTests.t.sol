@@ -1,33 +1,3 @@
-// function beforeStateClose() public {
-//     vm.startPrank(_owner);
-//     escrow.close();
-//     vm.stopPrank();
-// }
-
-// function testStateClose() public {
-//     beforeStateClose();
-//     assertEq(
-//         escrow.state() == RefundEscrow.State.Closed,
-//         true,
-//         "State issue"
-//     );
-// }
-
-// function beforeStateRefund() public {
-//     vm.startPrank(_owner);
-//     escrow.enableRefunds();
-//     vm.stopPrank();
-// }
-
-// function testStateRefund() public {
-//     beforeStateRefund();
-//     assertEq(
-//         escrow.state() == RefundEscrow.State.Refunding,
-//         true,
-//         "State issue"
-//     );
-// }
-
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 

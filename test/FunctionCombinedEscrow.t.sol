@@ -5,6 +5,7 @@ import {Test, console} from "../lib/forge-std/src/Test.sol";
 import {BaseCombinedEscrowTest} from "./BaseCombinedEscrow.t.sol";
 import {SimpleToken, ERC20} from "../src/utils/SimpleToken.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {Escrow} from "src/oz-escrow/Escrow.sol";
 import {EscrowFunctions} from "./utils/EscrowFunctions.t.sol";
 import {TypeValidation} from "./utils/TypeValidation.t.sol";
 import {CombinedEscrow} from "../src/CombinedEscrow.sol";
@@ -83,41 +84,25 @@ contract FunctionBaseCombinedEscrowTest is
         user_depositErc_escrow(escrow, address(_tok), user, amount);
         // 10 ether is transferred to user in the Base... setUp() tfr 10 - amount
         assertEq(_tok.balanceOf(user), 10 ether - amount, "Fail");
+        assertEq(escrow.erc20Balance(), amount, "Fail");
     }
-    function test_depositErc_withdraw() public {
+    function test_depositErc_withdraw(uint256 amount) public {
         // Test ERC20 deposit and withdrawal
         // 1. Deposit ERC20 tokens
         // 2. Close the escrow
         // 3. Withdraw ERC20 tokens
         // 4. Assert correct balances
+        amount = bound(amount, 1, 1 ether);
+        vm.deal(user, amount);
+        user_depositErc_escrow(escrow, address(_tok), user, amount);
+        assertEq(escrow.erc20Balance(), amount, "Fail");
+        user_close_escrow(escrow, _owner);
+
+        user_withdrawErc_escrow(escrow, user, amount);
+        assertEq(escrow.depositsOf(user), 0, "Fail");
+        assertEq(_tok.balanceOf(user), 10 ether, "Fail");
     }
 
-    function test_depositErc_withdraw() public {
-        // Test ERC20 deposit and withdrawal
-        // 1. Close the escrow
-        // 2. Deposit ERC20 tokens
-        // 3. Withdraw ERC20 tokens
-        // 4. Assert correct balances
-    }
-    function test_multipleDeposits_singleWithdraw() public {
-        // Test multiple deposits from different users and single withdrawal
-        // 1. Deposit from user1
-        // 2. Deposit from user1
-        // 3. Refund the escrow
-        // 4. Withdraw all funds to a single address
-        // 5. Assert correct balances
-    }
-
-    function test_partialWithdrawal() public {
-        // Test partial withdrawal of funds
-        // 1. Deposit from user1
-        // 2. Deposit from user2
-        // 2. Refund the escrow
-        // 3. Withdraw a portion of the funds user1
-        // 4. Assert correct balances
-        // 5. Withdraw the remaining funds to user2
-        // 6. Assert final balances
-    }
     function testReentrancyProtection() public {
         // Create a malicious contract that tries to re-enter the withdraw function
         MaliciousContract maliciousContract = new MaliciousContract(

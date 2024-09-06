@@ -139,7 +139,7 @@ contract CombinedEscrow is
         validateNewBalanceOverflow(super.depositsOf(refundee), msg.value);
         super.deposit(refundee);
     }
-
+    event evan(uint256);
     /**
      * @dev this is allowed only if escrow is refunding.
      */ function withdraw(
@@ -155,13 +155,14 @@ contract CombinedEscrow is
         uint256 deposits = super.depositsOf(payee);
         validateAmountStrictPositive(deposits);
         validateAddress(payee);
-        validateNewBalanceUnderflow(ethBalance(), deposits);
+        emit evan(deposits);
+        validateNewBalanceUnderflow(ethBalance(), deposits); // if deposits is > ethBalance() revert
 
         super.withdraw(payee);
 
         if (super.depositsOf(payee) != 0) revert BalanceTransferError();
         if (ethBalance() == 0) _burnAfterReading();
-        emit Withdrawn(payee, deposits);
+        // emit Withdrawn(payee, deposits);
     }
     // @dev verify fee before transfer
     function verifyAmountsBeforeTransfer(
@@ -260,13 +261,21 @@ contract CombinedEscrow is
     // or make a deposit both erc and eth (liquidity positions / LP staking rewards)
     function withdrawERC20(
         address payee
-    ) public virtual nonReentrant contractNotDestroyed {
-        if (state() != State.Closed) revert EscrowStateError();
+    )
+        public
+        virtual
+        nonReentrant
+        contractNotDestroyed
+        onlyWhen(state(), State.Closed)
+    {
         uint256 amount = userErc20Balances[address(_saleToken)][payee];
-        if (amount <= 0) revert InsufficientBalance();
+        validateAmountStrictPositive(amount);
+        validateAddress(payee);
+        validateNewBalanceUnderflow(totalErcBalance, amount);
         userErc20Balances[address(_saleToken)][payee] = 0;
         totalErcBalance -= amount;
         _saleToken.safeTransfer(payee, amount);
+        emit Withdrawn(payee, amount);
         if (totalErcBalance == 0) _burnAfterReading();
     }
 

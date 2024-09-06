@@ -110,4 +110,17 @@ contract EscrowFunctions is Test {
         vm.stopPrank();
         // escrow.deposit{value: a}(u);
     }
+
+    function user_withdrawErc_escrow(
+        CombinedEscrow escrow,
+        address u,
+        uint256 a
+    ) public {
+        vm.prank(u);
+        vm.expectEmit(true, true, true, true);
+        emit IERC20.Transfer(address(escrow), u, a);
+        emit Withdrawn(u, a);
+        emit Burned(DestructState.Active);
+        escrow.withdrawERC20(u);
+    }
 }

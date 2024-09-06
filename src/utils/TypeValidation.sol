@@ -22,7 +22,7 @@ abstract contract TypeValidation {
     }
 
     function validateNewBalanceUnderflow(uint256 a, uint256 b) internal pure {
-        if (a > b) revert UnderflowBlock();
+        if (a < b) revert UnderflowBlock();
     }
 
     function checkNumberForType(int256 a) internal {
