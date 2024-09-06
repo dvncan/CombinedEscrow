@@ -240,7 +240,8 @@ contract CombinedEscrow is
         uint256 amount,
         address router,
         address payee
-    ) public nonReentrant contractNotDestroyed {
+    ) public nonReentrant contractNotDestroyed onlyWhen(state(), State.Active) {
+        // TODO: add a state requirement
         if (_saleToken.balanceOf(msg.sender) == 0) revert InsufficientBalance();
         if (state() != State.Active) revert EscrowStateError();
         require(amount > 0, "Amount must be greater than 0");
@@ -254,6 +255,9 @@ contract CombinedEscrow is
      * @dev Withdraws ERC20 tokens from the escrow.
      * @param payee Address of the recipient.
      */
+
+    // either add a config state to deposit erc in then make withdrawErc when active
+    // or make a deposit both erc and eth (liquidity positions / LP staking rewards)
     function withdrawERC20(
         address payee
     ) public virtual nonReentrant contractNotDestroyed {

@@ -23,7 +23,7 @@ contract FunctionBaseCombinedEscrowTest is
         assertEq(user.balance, 0, "Fail");
     }
 
-    function test_withdraw(uint amount) public {
+    function test_withdraw_refund(uint amount) public {
         amount = bound(amount, 1, 1e39);
         vm.deal(user, amount);
         user_deposit_escrow_good(escrow, user, amount);
@@ -32,7 +32,7 @@ contract FunctionBaseCombinedEscrowTest is
 
         assertEq(user.balance, amount, "Fail");
     }
-    function test_withdrawDestruct(uint amount) public {
+    function test_withdrawDestruct_refund(uint amount) public {
         amount = bound(amount, 1, 1e39);
 
         vm.deal(user, amount);
@@ -41,16 +41,6 @@ contract FunctionBaseCombinedEscrowTest is
         user_fullWithdraw_escrow(escrow, payable(user), amount);
 
         assertEq(user.balance, amount, "Fail");
-    }
-
-    function test_depositErc(uint256 amount) public {
-        amount = bound(amount, 1, 1 ether);
-        // vm.assume(amount < )
-        vm.deal(user, amount);
-
-        user_depositErc_escrow(escrow, address(_tok), user, amount);
-        // 10 ether is transferred to user in the Base... setUp() tfr 10 - amount
-        assertEq(_tok.balanceOf(user), 10 ether - amount, "Fail");
     }
 
     function test_deposit_largerBalance() public {
@@ -86,15 +76,29 @@ contract FunctionBaseCombinedEscrowTest is
         user_deposit_escrow_revert(escrow, user, uint256(amount));
         assertEq(user.balance, maxAmount, "Fail");
     }
-
+    function test_depositErc(uint256 amount) public {
+        amount = bound(amount, 1, 1 ether);
+        // vm.assume(amount < )
+        vm.deal(user, amount);
+        user_depositErc_escrow(escrow, address(_tok), user, amount);
+        // 10 ether is transferred to user in the Base... setUp() tfr 10 - amount
+        assertEq(_tok.balanceOf(user), 10 ether - amount, "Fail");
+    }
     function test_depositErc_withdraw() public {
         // Test ERC20 deposit and withdrawal
         // 1. Deposit ERC20 tokens
-        // 2. Refund the escrow
+        // 2. Close the escrow
         // 3. Withdraw ERC20 tokens
         // 4. Assert correct balances
     }
 
+    function test_depositErc_withdraw() public {
+        // Test ERC20 deposit and withdrawal
+        // 1. Close the escrow
+        // 2. Deposit ERC20 tokens
+        // 3. Withdraw ERC20 tokens
+        // 4. Assert correct balances
+    }
     function test_multipleDeposits_singleWithdraw() public {
         // Test multiple deposits from different users and single withdrawal
         // 1. Deposit from user1
