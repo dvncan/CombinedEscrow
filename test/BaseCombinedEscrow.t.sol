@@ -25,7 +25,7 @@ contract BaseCombinedEscrowTest is Test {
         vm.startPrank(_owner);
 
         // Create & mint test tokens
-        _initialTokenSupply = 100 ether;
+        _initialTokenSupply = 100_000_000 ether;
         //TODO: review why the event emitting is not working.
         // vm.expectEmit(false, true, false, false);
         // emit IERC20.Transfer(address(0), _owner, _initialTokenSupply);
@@ -74,6 +74,13 @@ contract BaseCombinedEscrowTest is Test {
         assertEq(
             _tok.balanceOf(_owner),
             _initialTokenSupply,
+            "Failure: SimpleToken Initial Balance"
+        );
+        vm.prank(_owner);
+        _tok.transfer(user, 10 ether);
+        assertEq(
+            _tok.balanceOf(_owner),
+            _initialTokenSupply - 10 ether,
             "Failure: SimpleToken Initial Balance"
         );
 

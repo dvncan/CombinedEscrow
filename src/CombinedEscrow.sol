@@ -14,12 +14,15 @@
 // SPDX-License-Identifier: BONSAI3
 pragma solidity >=0.8.24;
 
-import {SelfDestruct} from "./SelfDestruct.sol";
+// OZ-Contracts
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import {RefundEscrow} from "./RefundEscrow.sol";
 import {SafeERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+
+// Custom/Modified
+import {RefundEscrow} from "./oz-escrow/RefundEscrow.sol";
 import {TypeValidation} from "./utils/TypeValidation.sol";
+import {SelfDestruct} from "./SelfDestruct.sol";
 /***********************************************************************************
  *                                                                                 *
  *           █████████████████████████████████████████████████████████████████    *
@@ -46,9 +49,9 @@ import {TypeValidation} from "./utils/TypeValidation.sol";
  *
  *
  *  @notice: steps to refund are
- *              1. escrow.enableRefund(); // active -> refund
- *              2. escrow.withdrawAfterRefund();
- *              3. escrow.
+ *              1. escrow.enableRefund(); // active -> refund // onlyOwner
+ *              2. escrow.withdraw(user);
+ *              3. escrow.beneficiaryWithdrawRefund() // last step
  *
  ***********************************************************************************/
 
@@ -127,15 +130,19 @@ contract CombinedEscrow is
         contractNotDestroyed
         onlyWhen(state(), State.Active)
     {
-        if (msg.value <= 0) revert InsufficientBalance();
+        // checkNumberForType(int256(msg.value));
         validateAddressStrict(refundee);
+        validateAmountStrictPositive(msg.value);
+        //check overflow for total balance
+        validateNewBalanceOverflow(ethBalance(), msg.value);
+        //check overflow for individual balance
+        validateNewBalanceOverflow(super.depositsOf(refundee), msg.value);
         super.deposit(refundee);
     }
 
     /**
      * @dev this is allowed only if escrow is refunding.
-     */
-    function withdraw(
+     */ function withdraw(
         address payable payee
     )
         public
@@ -146,27 +153,27 @@ contract CombinedEscrow is
         onlyWhen(state(), State.Refunding)
     {
         uint256 deposits = super.depositsOf(payee);
-        if (deposits <= 0) revert InsufficientBalance();
-        require(
-            withdrawalAllowed(payee),
-            "ConditionalEscrow: payee is not allowed to withdraw"
-        );
+        validateAmountStrictPositive(deposits);
+        validateAddress(payee);
+        validateNewBalanceUnderflow(ethBalance(), deposits);
+
         super.withdraw(payee);
+
         if (super.depositsOf(payee) != 0) revert BalanceTransferError();
         if (ethBalance() == 0) _burnAfterReading();
         emit Withdrawn(payee, deposits);
     }
-
     // @dev verify fee before transfer
     function verifyAmountsBeforeTransfer(
         uint256 amountToSend,
         uint256 balance,
         uint256 fee
-    ) internal pure returns (bool) {
+    ) internal returns (bool) {
+        checkNumberForType(int256(amountToSend));
         if (balance <= 0) revert InsufficientBalance();
-        if (amountToSend <= 0 || amountToSend >= balance)
-            revert BalanceTransferError();
+        if (amountToSend <= 0) revert BalanceTransferError();
         if (amountToSend + fee != balance) revert BalanceTransferError();
+        validateNewBalanceUnderflow(amountToSend, balance);
         return true;
     }
 
