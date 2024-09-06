@@ -5,6 +5,7 @@ import {BaseCombinedEscrowTest} from "test/BaseCombinedEscrow.t.sol";
 import {EscrowFunctions} from "test/utils/EscrowFunctions.t.sol";
 import {Escrow} from "src/oz-escrow/Escrow.sol";
 import {TypeValidation} from "test/utils/TypeValidation.t.sol";
+
 contract AdvancedCombinedEscrowTests is
     BaseCombinedEscrowTest,
     EscrowFunctions,
@@ -83,5 +84,62 @@ contract AdvancedCombinedEscrowTests is
         // 4. user2 attempts to steal user1
         // 5. Withdraw all funds to a single address < attempt to steal >
         // 6. Assert correct balances
+    }
+
+    function testReentrancyProtection() public {
+        // Create a malicious contract that tries to re-enter the withdraw function
+        MaliciousContract maliciousContract = new MaliciousContract(
+            address(escrow)
+        );
+
+        // Deposit funds
+        uint256 depositAmount = 1 ether;
+        vm.deal(address(maliciousContract), depositAmount);
+        vm.prank(address(maliciousContract));
+        maliciousContract.deposit{value: depositAmount}();
+
+        // Refund the escrow
+        user_refund_escrow(escrow, _owner);
+
+        // Attempt to withdraw using the malicious contract
+        // vm.expectRevert("revert: ReentrancyGuard: reentrant call");
+        vm.expectRevert(); // "revert: ReentrancyGuard: reentrant call"
+        vm.prank(address(maliciousContract));
+        escrow.withdraw(payable(address(maliciousContract)));
+
+        // Assert that the reentrancy attack failed
+        assertEq(
+            address(escrow).balance,
+            depositAmount,
+            "Escrow balance should remain unchanged"
+        );
+        assertEq(
+            address(maliciousContract).balance,
+            0,
+            "Malicious contract should not receive funds"
+        );
+    }
+}
+import {CombinedEscrow} from "../src/CombinedEscrow.sol";
+
+// Malicious contract for testing reentrancy
+contract MaliciousContract {
+    CombinedEscrow private immutable escrow;
+    uint256 private constant ATTACK_COUNT = 3;
+    uint256 private attackCounter;
+
+    constructor(address _escrow) {
+        escrow = CombinedEscrow(payable(_escrow));
+    }
+
+    function deposit() external payable {
+        escrow.deposit{value: msg.value}(address(this));
+    }
+
+    receive() external payable {
+        if (attackCounter < ATTACK_COUNT) {
+            attackCounter++;
+            escrow.withdraw(payable(address(this)));
+        }
     }
 }

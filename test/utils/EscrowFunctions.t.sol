@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test, console} from "lib/forge-std/src/Test.sol";
+import {Test} from "lib/forge-std/src/Test.sol";
 import {CombinedEscrow, IERC20} from "src/CombinedEscrow.sol";
-import {SimpleToken} from "src/utils/SimpleToken.sol";
 contract EscrowFunctions is Test {
     enum DestructState {
         Inactive,

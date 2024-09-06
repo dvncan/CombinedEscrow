@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
-import {CombinedEscrow, RefundEscrow} from "../src/CombinedEscrow.sol";
-import {SimpleToken, ERC20} from "../src/utils/SimpleToken.sol";
+import {RefundEscrow} from "../src/CombinedEscrow.sol";
 
 //TEST IMPORTS
-import {Test, console} from "../lib/forge-std/src/Test.sol";
 import {BaseCombinedEscrowTest} from "./BaseCombinedEscrow.t.sol";
 import {EscrowFunctions} from "./utils/EscrowFunctions.t.sol";
 
